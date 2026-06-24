@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import type { User, Department } from '@/types';
-import { fetchDepartments } from '@/lib/supabaseData';
+import { fetchDepartments, fetchSystemUsers, createSystemUser, deleteSystemUser } from '@/lib/supabaseData';
 import { useEffect } from 'react';
 
 const roles = ['admin', 'director', 'operator'];
@@ -40,8 +40,18 @@ export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
 
+  const loadUsers = async () => {
+    try {
+      const data = await fetchSystemUsers();
+      setUsers(data as User[]);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     fetchDepartments().then(setDepartments).catch(console.error);
+    loadUsers();
   }, []);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -80,24 +90,31 @@ export default function UserManagement() {
     }
   };
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!formData.name || !formData.username || !formData.password || !formData.role) {
       toast.error('Error', { description: 'Please fill all required fields' });
       return;
     }
-    const newUser: User = {
-      id: Date.now().toString(),
-      name: formData.name,
-      department: formData.department || 'General',
-      username: formData.username,
-      email: `${formData.username}@mithela.local`,
-      role: formData.role,
-      createdBy: 'MD Sakib Hossain',
-    };
-    setUsers([...users, newUser]);
-    setFormData({ name: '', department: '', username: '', password: '', role: 'operator' });
-    setIsAddOpen(false);
-    toast.success('User Added', { description: `${newUser.name} has been added successfully` })
+    
+    try {
+      await createSystemUser({
+        email: `${formData.username}@mithela.local`,
+        password: formData.password,
+        role: formData.role,
+        department: formData.department || 'General',
+        name: formData.name,
+        username: formData.username
+      });
+      
+      setFormData({ name: '', department: '', username: '', password: '', role: 'operator' });
+      setIsAddOpen(false);
+      toast.success('User Added', { description: `${formData.name} has been added successfully` });
+      
+      // Refresh list
+      loadUsers();
+    } catch (error: any) {
+      toast.error('Error adding user', { description: error.message || 'Something went wrong' });
+    }
   };
 
   const handleEditUser = () => {
@@ -108,14 +125,22 @@ export default function UserManagement() {
     toast.success('User Updated', { description: 'User details have been updated' });
   };
 
-  const handleDeleteUsers = () => {
+  const handleDeleteUsers = async () => {
     if (selectedUsers.length === 0) {
       toast.error('Error', { description: 'Please select users to delete' });
       return;
     }
-    setUsers(users.filter((u) => !selectedUsers.includes(u.id)));
-    setSelectedUsers([]);
-    toast.success('Users Deleted', { description: `${selectedUsers.length} user(s) have been deleted` })
+    
+    try {
+      for (const id of selectedUsers) {
+        await deleteSystemUser(id);
+      }
+      setSelectedUsers([]);
+      toast.success('Users Deleted', { description: `${selectedUsers.length} user(s) have been deleted` });
+      loadUsers();
+    } catch (error: any) {
+      toast.error('Error deleting users', { description: error.message || 'Failed to delete some users' });
+    }
   };
 
   const getRoleBadgeColor = (role: string) => {
