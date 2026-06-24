@@ -1,38 +1,69 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, ShieldCheck, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { ROLE_HOME } from '@/lib/roleAccess';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+
+const REMEMBER_EMAIL_KEY = 'mithela_last_email';
+const BG_VIDEO_URL = 'https://res.cloudinary.com/dklipv4th/video/upload/v1781950055/bg-video_wunomy.mp4';
 
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [identifier, setIdentifier] = useState('');
+
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successInfo, setSuccessInfo] = useState<{ name: string; role: string } | null>(null);
+
+  // Prefill remembered email on mount
+  useEffect(() => {
+    const remembered = window.localStorage.getItem(REMEMBER_EMAIL_KEY);
+    if (remembered) {
+      setEmail(remembered);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
+
+    if (!email.trim() || !password) {
+      setError('Please fill in all fields.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const authUser = await login(identifier.trim(), password);
+      const authUser = await login(email.trim(), password);
+
       if (!authUser) {
-        setError('Invalid credentials. Please check your username/email and password.');
+        setError('Invalid email or password. Please try again.');
+        setPassword('');
         return;
       }
 
+      if (rememberMe) {
+        window.localStorage.setItem(REMEMBER_EMAIL_KEY, email.trim());
+      } else {
+        window.localStorage.removeItem(REMEMBER_EMAIL_KEY);
+      }
+
+      setSuccessInfo({ name: authUser.name, role: authUser.role });
       toast.success('Access granted', {
         description: `Welcome back, ${authUser.name}.`,
       });
-      navigate(ROLE_HOME[authUser.role]);
+
+      setTimeout(() => {
+        navigate(ROLE_HOME[authUser.role]);
+      }, 1800);
     } catch {
       setError('The sign-in service is currently unavailable. Please try again shortly.');
     } finally {
@@ -40,118 +71,247 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    setError('');
+
+    if (!email.trim()) {
+      setError('Enter your email first, then click "Forgot password?" again.');
+      return;
+    }
+
+    if (!isSupabaseConfigured || !supabase) {
+      setError('The sign-in service is currently unavailable. Please try again shortly.');
+      return;
+    }
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (resetError) throw resetError;
+
+      toast.success('Reset email sent', {
+        description: 'Check your inbox for a password reset link.',
+      });
+    } catch {
+      setError('Could not send reset email. Please try again or contact your administrator.');
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_38%),linear-gradient(135deg,_#07130f_0%,_#0f172a_100%)] p-4 text-slate-900 sm:p-6 lg:p-8">
-      <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl overflow-hidden rounded-[32px] border border-white/10 bg-white/95 shadow-2xl shadow-slate-950/30 backdrop-blur">
-        <div className="hidden w-1/2 flex-col justify-between bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 p-10 text-white lg:flex">
-          <div className="space-y-8">
-            <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/10 backdrop-blur">
-                <img src="/mithela-logo.svg" alt="Mithela Group logo" className="h-8 w-8" />
-              </div>
-              <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-emerald-200">Production Intelligence</p>
-                <h1 className="text-2xl font-semibold">Mithela ERP</h1>
-              </div>
-            </div>
+    <div className="login-page flex min-h-screen overflow-hidden bg-[#0c0c0c]">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Serif+Display:ital@0;1&family=Cormorant+Garamond:wght@400;500;600;700&display=swap');
 
-            <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-sm text-emerald-100">
-                <Sparkles className="h-4 w-4" />
-                Secure role-based operations
-              </div>
-              <h2 className="max-w-xl text-4xl font-semibold leading-tight">Modern control for textile production, costing, and reporting.</h2>
-              <p className="max-w-xl text-sm leading-7 text-emerald-50/80">
-                Monitor orders, machines, dyes, and reports from one secure workspace built for fast factory decisions.
-              </p>
-            </div>
+        .login-page { font-family: 'Inter', sans-serif; }
 
-            <div className="grid gap-4 rounded-3xl border border-white/10 bg-white/10 p-5 shadow-inner backdrop-blur-sm sm:grid-cols-2">
-              <div>
-                <p className="text-sm font-semibold">Real-time oversight</p>
-                <p className="mt-2 text-sm text-emerald-50/70">Live dashboards for directors and admins.</p>
-              </div>
-              <div>
-                <p className="text-sm font-semibold">Task-focused access</p>
-                <p className="mt-2 text-sm text-emerald-50/70">Operators see only the entry and export modules they need.</p>
-              </div>
-            </div>
+        .login-serif { font-family: 'DM Serif Display', serif; }
+        .login-garamond { font-family: 'Cormorant Garamond', serif; }
+
+        @keyframes loginFadeInDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes loginFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes loginFadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes loginSlideInRight { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes loginSpin { to { transform: rotate(360deg); } }
+        @keyframes loginPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes loginFadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+
+        .anim-fade-down { opacity: 0; animation: loginFadeInDown 0.7s ease 0.1s forwards; }
+        .anim-fade { opacity: 0; animation: loginFadeIn 0.6s ease 0.4s forwards; }
+        .anim-fade-up { opacity: 0; animation: loginFadeInUp 0.6s ease 0.5s forwards; }
+        .anim-tagline { opacity: 0; animation: loginFadeIn 0.6s ease 0.7s forwards; }
+        .anim-slide-1 { opacity: 0; animation: loginSlideInRight 0.6s ease 0.2s forwards; }
+        .anim-slide-2 { opacity: 0; animation: loginSlideInRight 0.6s ease 0.3s forwards; }
+        .anim-slide-3 { opacity: 0; animation: loginSlideInRight 0.6s ease 0.4s forwards; }
+        .anim-slide-4 { opacity: 0; animation: loginSlideInRight 0.6s ease 0.45s forwards; }
+        .anim-slide-5 { opacity: 0; animation: loginSlideInRight 0.6s ease 0.5s forwards; }
+        .anim-fade-late { opacity: 0; animation: loginFadeIn 0.5s ease 0.7s forwards; }
+        .anim-fade-latest { opacity: 0; animation: loginFadeIn 0.5s ease 0.75s forwards; }
+
+        .login-spinner { animation: loginSpin 0.8s linear infinite; }
+        .login-spinner-lg { animation: loginSpin 1s linear infinite; }
+        .login-security-dot { animation: loginPulse 2s ease-in-out infinite; }
+        .login-overlay-in { animation: loginFadeInOverlay 0.3s ease; }
+
+        .login-input::placeholder { color: #525252; }
+        .login-input:focus { border-color: #404040; background: #1f1f1f; }
+      `}</style>
+
+      {/* Success overlay */}
+      {successInfo ? (
+        <div className="login-overlay-in fixed inset-0 z-[1000] flex flex-col items-center justify-center bg-[#0c0c0c]">
+          <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-full border border-[#c9a96e] text-2xl text-[#c9a96e]">
+            <CheckCircle2 className="h-7 w-7" />
           </div>
-
-          <div className="flex items-center gap-3 text-sm text-emerald-50/70">
-            <ShieldCheck className="h-4 w-4" />
-            Protected by Supabase-ready authentication and RBAC.
+          <div className="login-serif mb-2 text-2xl text-[#f5f5f5]">Authentication Successful</div>
+          <div className="mb-1 text-sm text-[#a3a3a3]">Welcome back, {successInfo.name}</div>
+          <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-[#c9a96e]">
+            Role: {successInfo.role.toUpperCase()} | Redirecting to your dashboard...
           </div>
+          <div className="login-spinner-lg mt-6 h-8 w-8 rounded-full border-2 border-[#262626] border-t-[#c9a96e]" />
+        </div>
+      ) : null}
+
+      {/* Left panel - branding with video background */}
+      <div className="relative hidden min-w-0 flex-1 flex-col justify-center overflow-hidden px-[8%] lg:flex">
+        <div className="absolute inset-0 z-[-1] overflow-hidden">
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="h-full w-full object-cover"
+            style={{ filter: 'brightness(0.75) saturate(0.9)' }}
+          >
+            <source src={BG_VIDEO_URL} type="video/mp4" />
+          </video>
+          <div
+            className="absolute inset-0 z-[1]"
+            style={{
+              background:
+                'linear-gradient(90deg, rgba(12,12,12,0.45) 0%, rgba(12,12,12,0.25) 50%, rgba(12,12,12,0.15) 100%)',
+            }}
+          />
         </div>
 
-        <div className="flex flex-1 items-center justify-center bg-slate-50/80 px-6 py-10 sm:px-8 lg:px-12">
-          <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-300/40">
-            <div className="mb-8 text-center lg:hidden">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-950">
-                <img src="/mithela-logo.svg" alt="Mithela Group logo" className="h-8 w-8" />
+        <div className="relative z-[3] max-w-[520px] text-white">
+          <div className="anim-fade-down mb-12 flex items-center gap-5">
+            <img src="/mithela-logo.png" alt="Mithela Group" className="h-16 w-16 flex-shrink-0 opacity-90" />
+            <div className="flex flex-col">
+              <div className="login-serif text-[38px] leading-[1.1] tracking-tight text-[#f5f5f5]">
+                Mithela<span className="login-serif italic text-[#c9a96e]">Group</span>
               </div>
-              <h2 className="text-2xl font-semibold text-slate-900">Welcome back</h2>
-              <p className="mt-2 text-sm text-slate-500">Sign in to continue</p>
+              <div className="login-serif mt-1 text-lg uppercase tracking-[6px] text-[#737373]">ERP</div>
             </div>
-
-            <div className="mb-8 hidden lg:block">
-              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-emerald-600">Secure login</p>
-              <h2 className="mt-2 text-3xl font-semibold text-slate-900">Access your ERP workspace</h2>
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="identifier" className="text-sm font-medium text-slate-700">Username or Email</Label>
-                <Input
-                  id="identifier"
-                  type="text"
-                  value={identifier}
-                  onChange={(event) => setIdentifier(event.target.value)}
-                  placeholder="Enter username or email"
-                  className="h-11 border-slate-200 focus:border-emerald-500 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium text-slate-700">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Enter password"
-                    className="h-11 border-slate-200 pr-10 focus:border-emerald-500 focus:ring-emerald-500"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((value) => !value)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
-              </div>
-
-              {error ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {error}
-                </div>
-              ) : null}
-
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="h-11 w-full bg-emerald-700 text-sm font-semibold text-white hover:bg-emerald-800"
-              >
-                {isLoading ? 'Signing in...' : 'Sign in'}
-              </Button>
-            </form>
-
-
           </div>
+
+          <div className="anim-fade my-8 h-px w-12 bg-[#c9a96e]" />
+
+          <div className="login-garamond anim-fade-up max-w-[420px] text-xl leading-relaxed text-[#a3a3a3]">
+            Production tracking and costing management system for export-oriented textile manufacturing.
+          </div>
+
+          <div className="anim-tagline mt-8 text-xs font-medium uppercase tracking-[2px] text-[#737373]">
+            Committed With Client | 100% Export Oriented
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel - login form */}
+      <div className="relative z-[2] flex max-h-screen w-full min-w-0 flex-col justify-center overflow-y-auto border-l border-[#262626] bg-[#141414] px-7 py-9 sm:px-11 sm:py-12 lg:w-[420px] lg:min-w-[420px]">
+        <div className="anim-slide-1 mb-8">
+          <div className="mb-5 inline-flex items-center gap-2 rounded border border-[#262626] px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[2px] text-[#737373]">
+            <span className="h-[5px] w-[5px] rounded-full bg-[#16a34a]" />
+            Secure ERP Login
+          </div>
+          <div className="login-serif mb-1.5 text-[30px] tracking-tight text-[#f5f5f5]">Welcome Back</div>
+          <div className="text-sm text-[#737373]">Sign in to access your dashboard</div>
+        </div>
+
+        {error ? (
+          <div className="mb-5 flex items-center gap-2.5 rounded-md border border-[rgba(220,38,38,0.15)] bg-[rgba(220,38,38,0.06)] px-4 py-3 text-sm text-[#ef4444]">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        <form onSubmit={handleLogin} className="space-y-0">
+          <div className="anim-slide-2 mb-5">
+            <label htmlFor="email" className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-[#737373]">
+              Email Address
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Enter your email"
+              autoComplete="email"
+              required
+              className="login-input w-full rounded-lg border border-[#262626] bg-[#1a1a1a] px-4 py-3.5 text-sm text-[#f5f5f5] outline-none transition-all"
+            />
+          </div>
+
+          <div className="anim-slide-3 mb-5">
+            <label htmlFor="password" className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-[#737373]">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                required
+                className="login-input w-full rounded-lg border border-[#262626] bg-[#1a1a1a] px-4 py-3.5 pr-11 text-sm text-[#f5f5f5] outline-none transition-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center justify-center p-1.5 text-[#525252] transition-colors hover:text-[#a3a3a3]"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="anim-slide-4 mb-6 flex items-center justify-between">
+            <label className="flex items-center gap-2 text-[13px] text-[#a3a3a3]">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(event) => setRememberMe(event.target.checked)}
+                className="h-4 w-4 cursor-pointer accent-[#c9a96e]"
+              />
+              <span>Remember me</span>
+            </label>
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-[13px] font-medium text-[#a3a3a3] transition-colors hover:text-[#c9a96e]"
+            >
+              Forgot password?
+            </button>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="anim-slide-5 flex w-full items-center justify-center rounded-lg bg-[#c9a96e] py-3.5 text-sm font-bold tracking-wide text-[#0c0c0c] transition-colors hover:bg-[#b8945f] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isLoading ? (
+              <>
+                <span className="login-spinner mr-2 inline-block h-4 w-4 rounded-full border-2 border-[rgba(20,20,20,0.3)] border-t-[#0c0c0c]" />
+                Signing in...
+              </>
+            ) : (
+              'Sign In to ERP'
+            )}
+          </button>
+        </form>
+
+        <div className="anim-fade-late mt-6 text-center">
+          <p className="text-xs text-[#737373]">
+            Need access?{' '}
+            <a
+              href="mailto:admin@mithela-textile.com"
+              className="font-semibold text-[#a3a3a3] transition-colors hover:text-[#c9a96e]"
+            >
+              Contact System Administrator
+            </a>
+          </p>
+        </div>
+
+        <div className="anim-fade-latest mt-5 flex items-center justify-center gap-2 border-t border-[#262626] pt-5">
+          <span className="login-security-dot h-[5px] w-[5px] rounded-full bg-[#16a34a]" />
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#737373]">
+            256-bit SSL Encryption | Session Secured
+          </span>
         </div>
       </div>
     </div>
