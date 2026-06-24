@@ -264,3 +264,45 @@ export async function createDyesChemical(input: Omit<DyesChemical, 'id'>): Promi
     stockQty: data.stock_qty,
   };
 }
+
+// ==========================================
+// System Users (RPC Calls)
+// ==========================================
+
+export async function fetchSystemUsers() {
+  const client = getClient();
+  const { data, error } = await client.rpc('get_all_users');
+  if (error) {
+    console.error('Error fetching users via RPC:', error);
+    return [];
+  }
+  return (data || []).map((u: any) => ({
+    id: u.id,
+    email: u.email,
+    name: u.raw_user_meta_data?.name || u.email,
+    username: u.raw_user_meta_data?.username || 'unknown',
+    department: u.raw_user_meta_data?.department || 'Operations',
+    role: u.raw_user_meta_data?.role || 'operator',
+    createdBy: 'System Admin',
+  }));
+}
+
+export async function createSystemUser(payload: { email: string; password: string; role: string; department: string; name: string; username: string }) {
+  const client = getClient();
+  const { error } = await client.rpc('create_user', payload);
+  if (error) {
+    console.error('Error creating user via RPC:', error);
+    throw error;
+  }
+  return true;
+}
+
+export async function deleteSystemUser(userId: string) {
+  const client = getClient();
+  const { error } = await client.rpc('delete_user', { user_id: userId });
+  if (error) {
+    console.error('Error deleting user via RPC:', error);
+    throw error;
+  }
+  return true;
+}
